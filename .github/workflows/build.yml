@@ -99,7 +99,7 @@ jobs:
           ARG TARGETPLATFORM
           FROM --platform=$BUILDPLATFORM tonistiigi/xx:latest AS xx
           
-          # Use Debian Rust image (glibc) to avoid bindgen issues
+          # Build tools for Debian
           FROM --platform=$BUILDPLATFORM rust:slim-bookworm AS builder
           ARG TARGETPLATFORM
           COPY --from=xx / /
@@ -139,13 +139,12 @@ jobs:
           ENV SKIA_NINJA_COMMAND=/usr/bin/ninja
           ENV SKIA_GN_COMMAND=/usr/local/bin/gn
           
-          # Copy everything for the build
           COPY . .
           
           # Build with cache mounts
-          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-${TARGETPLATFORM} \
-              --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git-${TARGETPLATFORM} \
-              --mount=type=cache,target=/workspace/target,id=cargo-target-${TARGETPLATFORM} \
+          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-$TARGETPLATFORM \
+              --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git-$TARGETPLATFORM \
+              --mount=type=cache,target=/workspace/target,id=cargo-target-$TARGETPLATFORM \
               xx-cargo build --release && \
               xx-verify target/$(xx-cargo --print-target-triple)/release/taan && \
               cp target/$(xx-cargo --print-target-triple)/release/taan /taan && \
