@@ -34,9 +34,5 @@ slint = { version = "1.13.1", features = ["backend-android-activity-06"] }
 rspotify = { version = "0.15.1", features = ["reqwest-native-tls-vendored"] }
 reqwest = { version = "0.12.23", features = ["native-tls-vendored"] }
 
-# Vendor OpenSSL for musl builds (Alpine/postmarketOS)
-[target.'cfg(target_env = "musl")'.dependencies]
-openssl = { version = "*", features = ["vendored"] }
-
 [build-dependencies]
 slint-build = "1.13.1"
