@@ -251,7 +251,7 @@ jobs:
             - `taan-linux-x86_64-glibc` - x86_64
             - `taan-linux-arm64-glibc` - ARM64
             
-            ### Linux (musl) - Alpine, postmarketOS, static linking
+            ### Linux (musl) - Alpine, postmarketOS, etc.
             - `taan-linux-x86_64-musl` - x86_64
             - `taan-linux-arm64-musl` - ARM64
             
