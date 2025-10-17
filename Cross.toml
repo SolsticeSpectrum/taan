@@ -4,12 +4,12 @@
 pre-build = [
     "dpkg --add-architecture amd64",
     "apt-get update",
-    "apt-get install -y python3 ninja-build pkg-config libfontconfig1-dev libfreetype6-dev"
+    "apt-get install -y python3 ninja-build clang pkg-config libfontconfig1-dev libfreetype6-dev"
 ]
 
 [target.aarch64-unknown-linux-musl]
 pre-build = [
     "dpkg --add-architecture arm64",
     "apt-get update", 
-    "apt-get install -y python3 ninja-build pkg-config libfontconfig1-dev:arm64 libfreetype6-dev:arm64"
+    "apt-get install -y python3 ninja-build clang pkg-config libfontconfig1-dev:arm64 libfreetype6-dev:arm64"
 ]
