@@ -117,6 +117,8 @@ jobs:
             -e SCCACHE_DIR=/sccache \
             -e SCCACHE_GHA_ENABLED=true \
             -e RUSTC_WRAPPER=sccache \
+            -e ACTIONS_CACHE_URL \
+            -e ACTIONS_RUNTIME_TOKEN \
             rust:alpine \
             sh -c '
               apk add --no-cache build-base alsa-lib-dev freetype-dev fontconfig-dev perl make python3 clang-dev openssl-dev ninja curl git gn linux-headers sccache && \
