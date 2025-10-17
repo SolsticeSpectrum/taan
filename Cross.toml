@@ -1,0 +1,15 @@
+# Dependencies needed for cross-compiling Skia
+
+[target.x86_64-unknown-linux-musl]
+pre-build = [
+    "dpkg --add-architecture amd64",
+    "apt-get update",
+    "apt-get install -y python3 pkg-config libfontconfig1-dev libfreetype6-dev"
+]
+
+[target.aarch64-unknown-linux-musl]
+pre-build = [
+    "dpkg --add-architecture arm64",
+    "apt-get update", 
+    "apt-get install -y python3 pkg-config libfontconfig1-dev:arm64 libfreetype6-dev:arm64"
+]
