@@ -119,7 +119,8 @@ jobs:
               make \
               python3 \
               ninja \
-              linux-headers
+              linux-headers \
+              unzip
           
           # Install gn manually
           RUN curl -L https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-amd64/+/latest -o /tmp/gn.zip && \
@@ -151,24 +152,6 @@ jobs:
                   ln -s "$(xx-info)" "$(xx-info sysroot)/usr/lib/gcc/$(xx-cargo --print-target-triple)"; \
                 fi; \
               fi
-          
-          WORKDIR /workspace
-          
-          # Copy everything for the build
-          COPY . .
-          
-          # Build with cache mounts using xx-cargo (same as Czkawka)
-          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-$TARGETARCH \
-              --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git-$TARGETARCH \
-              --mount=type=cache,target=/workspace/target,id=cargo-target-$TARGETARCH \
-              xx-cargo build --release && \
-              xx-verify target/$(xx-cargo --print-target-triple)/release/taan && \
-              cp target/$(xx-cargo --print-target-triple)/release/taan /taan && \
-              strip /taan
-          
-          FROM scratch
-          COPY --from=builder /taan /taan
-          EOF
 
       - name: Build x86_64 musl
         uses: docker/build-push-action@v6
