@@ -29,6 +29,12 @@ jobs:
             target: x86_64-pc-windows-msvc
             artifact: taan-windows-x86_64
             binary: taan.exe
+          - name: Windows ARM64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            artifact: taan-windows-arm64
+            binary: taan.exe
+          # glibc builds for Ubuntu, Debian, Fedora, etc.
           - name: Linux x86_64 (glibc)
             runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
@@ -67,6 +73,7 @@ jobs:
           path: target/${{ matrix.target }}/release/${{ matrix.binary }}
 
   build-musl:
+    # musl builds for Alpine Linux - uses cross because musl cross-compilation is a pain
     name: Build ${{ matrix.name }}
     runs-on: ubuntu-latest
     strategy:
@@ -92,6 +99,10 @@ jobs:
         run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build binary with cross
+        # Vendor OpenSSL to avoid musl cross-compilation issues with transitive deps
+        env:
+          OPENSSL_STATIC: 1
+          OPENSSL_VENDORED: 1
         run: cross build --release --target ${{ matrix.target }}
 
       - name: Upload artifact
@@ -157,6 +168,7 @@ jobs:
             
             ### Windows
             - `taan-windows-x86_64-taan.exe` - x86_64
+            - `taan-windows-arm64-taan.exe` - ARM64
           generate_release_notes: true
           files: release-files/*
           make_latest: true
