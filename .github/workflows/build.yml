@@ -99,11 +99,13 @@ jobs:
           ARG TARGETPLATFORM
           FROM --platform=$BUILDPLATFORM tonistiigi/xx:latest AS xx
           
+          # Use Alpine (musl) as base - same as Czkawka
           FROM --platform=$BUILDPLATFORM rust:alpine AS builder
           ARG TARGETPLATFORM
           ARG TARGETARCH
           COPY --from=xx / /
           
+          # Install build tools - same as Czkawka script
           RUN apk add --no-cache \
               bash \
               curl \
@@ -118,13 +120,9 @@ jobs:
               python3 \
               ninja \
               linux-headers \
-              unzip
+              gn
           
-          RUN curl -L https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-amd64/+/latest -o /tmp/gn.zip && \
-              unzip /tmp/gn.zip -d /usr/local/bin && \
-              chmod +x /usr/local/bin/gn && \
-              rm /tmp/gn.zip
-          
+          # Install cross-compilation libraries using xx-apk (same as Czkawka)
           RUN xx-apk add --no-cache --no-scripts \
               musl-dev \
               gcc \
@@ -133,10 +131,12 @@ jobs:
               freetype-dev \
               fontconfig-dev
           
+          # Set RUSTFLAGS for musl (same as Czkawka)
           ENV RUSTFLAGS="-C target-feature=-crt-static"
           ENV SKIA_NINJA_COMMAND=/usr/bin/ninja
-          ENV SKIA_GN_COMMAND=/usr/local/bin/gn
+          ENV SKIA_GN_COMMAND=/usr/bin/gn
           
+          # Fix xx-cargo setup (same as Czkawka script)
           RUN if xx-info is-cross; then \
                 xx-cargo --setup-target-triple && \
                 if [ ! -e "/$(xx-cargo --print-target-triple)" ]; then \
@@ -149,8 +149,10 @@ jobs:
           
           WORKDIR /workspace
           
+          # Copy everything for the build
           COPY . .
           
+          # Build with cache mounts using xx-cargo (same as Czkawka)
           RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-$TARGETARCH \
               --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git-$TARGETARCH \
               --mount=type=cache,target=/workspace/target,id=cargo-target-$TARGETARCH \
