@@ -73,35 +73,39 @@ jobs:
           path: target/${{ matrix.target }}/release/${{ matrix.binary }}
 
   build-musl:
-    # musl builds for Alpine Linux - uses cross because musl cross-compilation is a pain
+    # musl builds for Alpine/postmarketOS using Alpine Docker
     name: Build ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: Linux x86_64 (musl)
+            runner: ubuntu-latest
+            platform: linux/amd64
             target: x86_64-unknown-linux-musl
             artifact: taan-linux-x86_64-musl
           - name: Linux ARM64 (musl)
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
             target: aarch64-unknown-linux-musl
             artifact: taan-linux-arm64-musl
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Build binary with cross
-        env:
-          RUSTFLAGS: "-C target-feature=-crt-static"
-        run: cross build --release --target ${{ matrix.target }}
+      - name: Build in Alpine Docker
+        run: |
+          docker run --rm \
+            --platform ${{ matrix.platform }} \
+            -v $PWD:/workspace \
+            -w /workspace \
+            alpine:latest \
+            sh -c '
+              apk add --no-cache rust cargo build-base alsa-lib-dev freetype-dev fontconfig-dev && \
+              cargo build --release --target ${{ matrix.target }} && \
+              strip target/${{ matrix.target }}/release/taan
+            '
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -156,7 +160,7 @@ jobs:
             - `taan-linux-x86_64-glibc-taan` - x86_64
             - `taan-linux-arm64-glibc-taan` - ARM64
             
-            ### Linux (musl) - Alpine, static linking
+            ### Linux (musl) - Alpine, postmarketOS, static linking
             - `taan-linux-x86_64-musl-taan` - x86_64
             - `taan-linux-arm64-musl-taan` - ARM64
             
