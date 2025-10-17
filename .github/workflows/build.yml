@@ -99,13 +99,11 @@ jobs:
           ARG TARGETPLATFORM
           FROM --platform=$BUILDPLATFORM tonistiigi/xx:latest AS xx
           
-          # Use Alpine (musl) as base - same as Czkawka
           FROM --platform=$BUILDPLATFORM rust:alpine AS builder
           ARG TARGETPLATFORM
           ARG TARGETARCH
           COPY --from=xx / /
           
-          # Install build tools - same as Czkawka script
           RUN apk add --no-cache \
               bash \
               curl \
@@ -122,13 +120,11 @@ jobs:
               linux-headers \
               unzip
           
-          # Install gn manually
           RUN curl -L https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-amd64/+/latest -o /tmp/gn.zip && \
               unzip /tmp/gn.zip -d /usr/local/bin && \
               chmod +x /usr/local/bin/gn && \
               rm /tmp/gn.zip
           
-          # Install cross-compilation libraries using xx-apk (same as Czkawka)
           RUN xx-apk add --no-cache --no-scripts \
               musl-dev \
               gcc \
@@ -137,12 +133,10 @@ jobs:
               freetype-dev \
               fontconfig-dev
           
-          # Set RUSTFLAGS for musl (same as Czkawka)
           ENV RUSTFLAGS="-C target-feature=-crt-static"
           ENV SKIA_NINJA_COMMAND=/usr/bin/ninja
           ENV SKIA_GN_COMMAND=/usr/local/bin/gn
           
-          # Fix xx-cargo setup (same as Czkawka script)
           RUN if xx-info is-cross; then \
                 xx-cargo --setup-target-triple && \
                 if [ ! -e "/$(xx-cargo --print-target-triple)" ]; then \
@@ -152,6 +146,42 @@ jobs:
                   ln -s "$(xx-info)" "$(xx-info sysroot)/usr/lib/gcc/$(xx-cargo --print-target-triple)"; \
                 fi; \
               fi
+          
+          WORKDIR /workspace
+          
+          COPY . .
+          
+          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-$TARGETARCH \
+              --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git-$TARGETARCH \
+              --mount=type=cache,target=/workspace/target,id=cargo-target-$TARGETARCH \
+              xx-cargo build --release && \
+              xx-verify target/$(xx-cargo --print-target-triple)/release/taan && \
+              cp target/$(xx-cargo --print-target-triple)/release/taan /taan && \
+              strip /taan
+          
+          FROM scratch
+          COPY --from=builder /taan /taan
+          EOF
+
+      - name: Build x86_64 musl
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.musl
+          platforms: linux/amd64
+          outputs: type=local,dest=./dist-x86_64
+          cache-from: type=gha,scope=musl-x86_64
+          cache-to: type=gha,mode=min,scope=musl-x86_64
+
+      - name: Build ARM64 musl
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.musl
+          platforms: linux/arm64
+          outputs: type=local,dest=./dist-arm64
+          cache-from: type=gha,scope=musl-arm64
+          cache-to: type=gha,mode=min,scope=musl-arm64
 
       - name: Build x86_64 musl
         uses: docker/build-push-action@v6
