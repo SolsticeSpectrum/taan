@@ -198,10 +198,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download native artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: taan-*
 
       - name: List artifacts for debugging
         run: |
@@ -214,11 +215,6 @@ jobs:
           cd artifacts
           
           for dir in */; do
-            if [[ "$dir" == *".dockerbuild"* ]]; then
-              echo "Skipping Docker metadata: $dir"
-              continue
-            fi
-            
             cd "$dir"
             for file in *; do
               if [[ "$file" == *.exe ]]; then
@@ -235,7 +231,6 @@ jobs:
           
           cd ../release-files
           
-          # Generate SHA256 checksums
           for file in *; do
             sha256sum "$file" > "${file}.sha256"
           done
