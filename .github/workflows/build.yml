@@ -113,6 +113,7 @@ jobs:
             -w /workspace \
             -e SCCACHE_DIR=/sccache \
             -e RUSTC_WRAPPER=sccache \
+            -e RUSTFLAGS="-C target-feature=-crt-static" \
             rust:alpine \
             sh -c '
               apk add --no-cache build-base alsa-lib-dev freetype-dev fontconfig-dev perl make python3 clang-dev openssl-dev ninja curl git gn linux-headers sccache && \
