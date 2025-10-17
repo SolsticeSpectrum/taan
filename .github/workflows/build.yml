@@ -105,12 +105,14 @@ jobs:
           ARG TARGETARCH
           COPY --from=xx / /
           
-          # Install build tools - same as Czkawka script
+          # Install build tools - same as Czkawka script + clang-libs for bindgen
           RUN apk add --no-cache \
               bash \
               curl \
               git \
               clang \
+              clang-libs \
+              clang-dev \
               g++ \
               lld \
               patch \
