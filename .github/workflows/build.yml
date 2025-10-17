@@ -99,13 +99,11 @@ jobs:
           ARG TARGETPLATFORM
           FROM --platform=$BUILDPLATFORM tonistiigi/xx:latest AS xx
           
-          # Build tools for Debian
           FROM --platform=$BUILDPLATFORM rust:slim-bookworm AS builder
           ARG TARGETPLATFORM
           ARG TARGETARCH
           COPY --from=xx / /
           
-          # Build tools for Debian
           RUN apt-get update && apt-get install -y \
               build-essential \
               pkg-config \
@@ -116,24 +114,15 @@ jobs:
               unzip \
               python3 \
               ninja-build \
+              musl-tools \
               && rm -rf /var/lib/apt/lists/*
           
-          # Debian doesn't have gn in repos
           RUN curl -L https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-amd64/+/latest -o /tmp/gn.zip && \
               unzip /tmp/gn.zip -d /usr/local/bin && \
               chmod +x /usr/local/bin/gn && \
               rm /tmp/gn.zip
           
-          # musl cross-compilation toolchain
-          RUN xx-apt-get install -y \
-              gcc \
-              g++ \
-              libc6-dev \
-              libasound2-dev \
-              libfreetype-dev \
-              libfontconfig1-dev \
-              libssl-dev \
-              pkg-config
+          RUN rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
           
           WORKDIR /workspace
           
@@ -143,13 +132,23 @@ jobs:
           
           COPY . .
           
-          # Build with cache mounts
+          RUN if [ "$TARGETARCH" = "amd64" ]; then \
+                echo "x86_64-unknown-linux-musl" > /tmp/rust-target; \
+              elif [ "$TARGETARCH" = "arm64" ]; then \
+                echo "aarch64-unknown-linux-musl" > /tmp/rust-target; \
+              fi
+          
           RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-$TARGETARCH \
               --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git-$TARGETARCH \
               --mount=type=cache,target=/workspace/target,id=cargo-target-$TARGETARCH \
-              xx-cargo build --release && \
-              xx-verify target/$(xx-cargo --print-target-triple)/release/taan && \
-              cp target/$(xx-cargo --print-target-triple)/release/taan /taan && \
+              RUST_TARGET=$(cat /tmp/rust-target) && \
+              if [ "$TARGETARCH" = "arm64" ]; then \
+                export CC_aarch64_unknown_linux_musl=clang && \
+                export AR_aarch64_unknown_linux_musl=llvm-ar && \
+                export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=clang; \
+              fi && \
+              cargo build --release --target $RUST_TARGET && \
+              cp target/$RUST_TARGET/release/taan /taan && \
               strip /taan
           
           FROM scratch
