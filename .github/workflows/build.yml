@@ -99,10 +99,6 @@ jobs:
         run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build binary with cross
-        # Vendor OpenSSL to avoid musl cross-compilation issues with transitive deps
-        env:
-          OPENSSL_STATIC: 1
-          OPENSSL_VENDORED: 1
         run: cross build --release --target ${{ matrix.target }}
 
       - name: Upload artifact
