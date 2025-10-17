@@ -131,25 +131,26 @@ jobs:
           
           WORKDIR /workspace
           
+          # Copy manifests first to leverage caching
           COPY Cargo.toml Cargo.lock ./
-          COPY .cargo .cargo
+          RUN mkdir -p .cargo && test -f .cargo/config.toml && cp .cargo/config.toml .cargo/config.toml || true
           
           ENV RUSTFLAGS="-C target-feature=-crt-static"
           ENV SKIA_NINJA_COMMAND=/usr/bin/ninja
           ENV SKIA_GN_COMMAND=/usr/bin/gn
           
-          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=${TARGETPLATFORM}-registry \
-              --mount=type=cache,target=/workspace/target,id=${TARGETPLATFORM}-target \
-              mkdir -p src && \
-              echo "fn main() {}" > src/main.rs && \
-              xx-cargo build --release && \
-              rm -rf src
+          # Fetch dependencies (cached separately from build)
+          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-${TARGETPLATFORM} \
+              --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git-${TARGETPLATFORM} \
+              cargo fetch --locked
           
-          # Copy actual source code
+          # Copy source code
           COPY . .
           
-          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=${TARGETPLATFORM}-registry \
-              --mount=type=cache,target=/workspace/target,id=${TARGETPLATFORM}-target \
+          # Build with cache mounts and extract binary from cache
+          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-${TARGETPLATFORM} \
+              --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git-${TARGETPLATFORM} \
+              --mount=type=cache,target=/workspace/target,id=cargo-target-${TARGETPLATFORM} \
               xx-cargo build --release && \
               xx-verify target/$(xx-cargo --print-target-triple)/release/taan && \
               cp target/$(xx-cargo --print-target-triple)/release/taan /taan && \
