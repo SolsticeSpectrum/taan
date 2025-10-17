@@ -7,47 +7,157 @@ on:
     branches: [main]
 
 jobs:
-  build:
-    name: Build for ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  build-native:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
-
+        include:
+          - name: macOS x86_64
+            runner: macos-latest
+            target: x86_64-apple-darwin
+            artifact: taan-macos-x86_64
+            binary: taan
+          - name: macOS ARM64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            artifact: taan-macos-arm64
+            binary: taan
+          - name: Windows x86_64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: taan-windows-x86_64
+            binary: taan.exe
+          - name: Linux x86_64 (glibc)
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: taan-linux-x86_64-glibc
+            binary: taan
+          - name: Linux ARM64 (glibc)
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            artifact: taan-linux-arm64-glibc
+            binary: taan
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
       - name: Install Ubuntu dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y build-essential libasound2-dev libfreetype-dev libfontconfig-dev
+        if: startsWith(matrix.runner, 'ubuntu')
+        run: sudo apt-get update && sudo apt-get install -y build-essential libasound2-dev libfreetype-dev libfontconfig-dev
 
       - name: Build binary
-        run: cargo build --release
+        run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Upload artifact - Linux
-        if: matrix.os == 'ubuntu-latest'
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: taan-linux
-          path: target/release/taan
+          name: ${{ matrix.artifact }}
+          path: target/${{ matrix.target }}/release/${{ matrix.binary }}
 
-      - name: Upload artifact - macOS
-        if: matrix.os == 'macos-latest'
+  build-musl:
+    name: Build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64 (musl)
+            target: x86_64-unknown-linux-musl
+            artifact: taan-linux-x86_64-musl
+          - name: Linux ARM64 (musl)
+            target: aarch64-unknown-linux-musl
+            artifact: taan-linux-arm64-musl
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build binary with cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: taan-macos
-          path: target/release/taan
+          name: ${{ matrix.artifact }}
+          path: target/${{ matrix.target }}/release/taan
 
-      - name: Upload artifact - Windows
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
+  release:
+    name: Create Release
+    needs: [build-native, build-musl]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          name: taan-windows
-          path: target/release/taan.exe
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          cd artifacts
+          for dir in */; do
+            cd "$dir"
+            for file in *; do
+              cp "$file" "../../release-files/${dir%/}-${file}"
+            done
+            cd ..
+          done
+          cd ../release-files
+          for file in *; do
+            sha256sum "$file" > "${file}.sha256"
+          done
+          ls -la
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "build-${{ github.run_number }}"
+          name: "Build #${{ github.run_number }}"
+          body: |
+            Automated build from main branch
+            
+            ## Downloads
+            
+            ### Linux (glibc) - Ubuntu, Debian, Fedora, etc.
+            - `taan-linux-x86_64-glibc-taan` - x86_64
+            - `taan-linux-arm64-glibc-taan` - ARM64
+            
+            ### Linux (musl) - Alpine, static linking
+            - `taan-linux-x86_64-musl-taan` - x86_64
+            - `taan-linux-arm64-musl-taan` - ARM64
+            
+            ### macOS
+            - `taan-macos-x86_64-taan` - Intel Macs
+            - `taan-macos-arm64-taan` - Apple Silicon
+            
+            ### Windows
+            - `taan-windows-x86_64-taan.exe` - x86_64
+          generate_release_notes: true
+          files: release-files/*
+          make_latest: true
+          token: ${{ secrets.GITHUB_TOKEN }}
