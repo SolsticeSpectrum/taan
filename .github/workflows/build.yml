@@ -73,62 +73,123 @@ jobs:
           path: target/${{ matrix.target }}/release/${{ matrix.binary }}
 
   build-musl:
-    # musl builds for Alpine/postmarketOS using Alpine Docker
-    name: Build ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Linux x86_64 (musl)
-            runner: ubuntu-latest
-            platform: linux/amd64
-            target: x86_64-unknown-linux-musl
-            artifact: taan-linux-x86_64-musl
-          - name: Linux ARM64 (musl)
-            runner: ubuntu-24.04-arm
-            platform: linux/arm64
-            target: aarch64-unknown-linux-musl
-            artifact: taan-linux-arm64-musl
+    # musl builds for Alpine/postmarketOS (cross-compile using QEMU/Buildx)
+    name: Build musl binaries
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup cache directories
-        run: |
-          mkdir -p $HOME/.cargo-docker-cache/registry
-          mkdir -p $HOME/.cargo-docker-cache/git
-          mkdir -p $HOME/.cargo-docker-cache/target-${{ matrix.target }}
-          mkdir -p $HOME/.sccache
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64,amd64
 
-      - name: Build in Alpine Docker
-        run: |
-          docker run --rm \
-            --platform ${{ matrix.platform }} \
-            -v $PWD:/workspace \
-            -v $HOME/.cargo-docker-cache/registry:/usr/local/cargo/registry \
-            -v $HOME/.cargo-docker-cache/git:/usr/local/cargo/git \
-            -v $HOME/.cargo-docker-cache/target-${{ matrix.target }}:/workspace/target \
-            -v $HOME/.sccache:/sccache \
-            -w /workspace \
-            -e SCCACHE_DIR=/sccache \
-            -e RUSTC_WRAPPER=sccache \
-            -e RUSTFLAGS="-C target-feature=-crt-static" \
-            rust:alpine \
-            sh -c '
-              apk add --no-cache build-base alsa-lib-dev freetype-dev fontconfig-dev perl make python3 clang-dev openssl-dev ninja curl git gn linux-headers sccache && \
-              export SKIA_NINJA_COMMAND=/usr/bin/ninja && \
-              export SKIA_GN_COMMAND=/usr/bin/gn && \
-              cargo build --release --target ${{ matrix.target }} && \
-              sccache --show-stats && \
-              strip target/${{ matrix.target }}/release/taan
-            '
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          config-inline: |
+            [worker.oci]
+              max-parallelism = 2
 
-      - name: Upload artifact
+      - name: Create Dockerfile for musl builds
+        run: |
+          cat > Dockerfile.musl << 'EOF'
+          # syntax=docker/dockerfile:1.4
+          ARG TARGETPLATFORM
+          FROM --platform=$BUILDPLATFORM tonistiigi/xx:latest AS xx
+          
+          FROM --platform=$BUILDPLATFORM rust:alpine AS builder
+          ARG TARGETPLATFORM
+          COPY --from=xx / /
+          
+          RUN apk add --no-cache \
+              build-base \
+              alsa-lib-dev \
+              freetype-dev \
+              fontconfig-dev \
+              perl \
+              make \
+              python3 \
+              clang \
+              clang-dev \
+              openssl-dev \
+              ninja \
+              curl \
+              git \
+              gn \
+              linux-headers \
+              lld
+          
+          RUN xx-apk add --no-cache \
+              musl-dev \
+              gcc \
+              alsa-lib-dev \
+              freetype-dev \
+              fontconfig-dev \
+              openssl-dev
+          
+          WORKDIR /workspace
+          
+          COPY Cargo.toml Cargo.lock ./
+          COPY .cargo .cargo
+          
+          ENV RUSTFLAGS="-C target-feature=-crt-static"
+          ENV SKIA_NINJA_COMMAND=/usr/bin/ninja
+          ENV SKIA_GN_COMMAND=/usr/bin/gn
+          
+          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=${TARGETPLATFORM}-registry \
+              --mount=type=cache,target=/workspace/target,id=${TARGETPLATFORM}-target \
+              mkdir -p src && \
+              echo "fn main() {}" > src/main.rs && \
+              xx-cargo build --release && \
+              rm -rf src
+          
+          # Copy actual source code
+          COPY . .
+          
+          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=${TARGETPLATFORM}-registry \
+              --mount=type=cache,target=/workspace/target,id=${TARGETPLATFORM}-target \
+              xx-cargo build --release && \
+              xx-verify target/$(xx-cargo --print-target-triple)/release/taan && \
+              cp target/$(xx-cargo --print-target-triple)/release/taan /taan && \
+              strip /taan
+          
+          FROM scratch
+          COPY --from=builder /taan /taan
+          EOF
+
+      - name: Build x86_64 musl
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.musl
+          platforms: linux/amd64
+          outputs: type=local,dest=./dist-x86_64
+          cache-from: type=gha,scope=musl-x86_64
+          cache-to: type=gha,mode=max,scope=musl-x86_64
+
+      - name: Build ARM64 musl
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.musl
+          platforms: linux/arm64
+          outputs: type=local,dest=./dist-arm64
+          cache-from: type=gha,scope=musl-arm64
+          cache-to: type=gha,mode=max,scope=musl-arm64
+
+      - name: Upload x86_64 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: target/${{ matrix.target }}/release/taan
+          name: taan-linux-x86_64-musl
+          path: dist-x86_64/taan
+
+      - name: Upload ARM64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: taan-linux-arm64-musl
+          path: dist-arm64/taan
 
   release:
     name: Create Release
