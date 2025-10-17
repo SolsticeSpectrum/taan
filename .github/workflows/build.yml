@@ -112,6 +112,7 @@ jobs:
               lld \
               git \
               curl \
+              unzip \
               python3 \
               ninja-build \
               && rm -rf /var/lib/apt/lists/*
