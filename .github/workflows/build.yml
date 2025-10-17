@@ -203,22 +203,45 @@ jobs:
         with:
           path: artifacts
 
+      - name: List artifacts for debugging
+        run: |
+          echo "Contents of artifacts directory:"
+          ls -laR artifacts/
+
       - name: Prepare release files
         run: |
           mkdir -p release-files
           cd artifacts
+          
           for dir in */; do
+            if [[ "$dir" == *".dockerbuild"* ]]; then
+              echo "Skipping Docker metadata: $dir"
+              continue
+            fi
+            
             cd "$dir"
             for file in *; do
-              cp "$file" "../../release-files/${dir%/}-${file}"
+              if [[ "$file" == *.exe ]]; then
+                ext=".exe"
+              else
+                ext=""
+              fi
+              
+              artifact_name="${dir%/}"
+              cp "$file" "../../release-files/${artifact_name}${ext}"
             done
             cd ..
           done
+          
           cd ../release-files
+          
+          # Generate SHA256 checksums
           for file in *; do
             sha256sum "$file" > "${file}.sha256"
           done
-          ls -la
+          
+          echo "Release files prepared:"
+          ls -lh
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -231,20 +254,26 @@ jobs:
             ## Downloads
             
             ### Linux (glibc) - Ubuntu, Debian, Fedora, etc.
-            - `taan-linux-x86_64-glibc-taan` - x86_64
-            - `taan-linux-arm64-glibc-taan` - ARM64
+            - `taan-linux-x86_64-glibc` - x86_64
+            - `taan-linux-arm64-glibc` - ARM64
             
             ### Linux (musl) - Alpine, postmarketOS, static linking
-            - `taan-linux-x86_64-musl-taan` - x86_64
-            - `taan-linux-arm64-musl-taan` - ARM64
+            - `taan-linux-x86_64-musl` - x86_64
+            - `taan-linux-arm64-musl` - ARM64
             
             ### macOS
-            - `taan-macos-x86_64-taan` - Intel Macs
-            - `taan-macos-arm64-taan` - Apple Silicon
+            - `taan-macos-x86_64` - Intel Macs
+            - `taan-macos-arm64` - Apple Silicon
             
             ### Windows
-            - `taan-windows-x86_64-taan.exe` - x86_64
-            - `taan-windows-arm64-taan.exe` - ARM64
+            - `taan-windows-x86_64.exe` - x86_64
+            - `taan-windows-arm64.exe` - ARM64
+            
+            ### Verify Downloads
+            Each binary includes a `.sha256` file for verification:
+            ```bash
+            sha256sum -c taan-linux-x86_64-musl.sha256
+            ```
           generate_release_notes: true
           files: release-files/*
           make_latest: true
