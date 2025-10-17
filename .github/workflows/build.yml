@@ -73,7 +73,7 @@ jobs:
           path: target/${{ matrix.target }}/release/${{ matrix.binary }}
 
   build-musl:
-    # musl builds for Alpine/postmarketOS using Alpine Docker with sccache
+    # musl builds for Alpine/postmarketOS using Alpine Docker
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -94,9 +94,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.7
-
       - name: Setup cache directories
         run: |
           mkdir -p $HOME/.cargo-docker-cache/registry
@@ -115,10 +112,7 @@ jobs:
             -v $HOME/.sccache:/sccache \
             -w /workspace \
             -e SCCACHE_DIR=/sccache \
-            -e SCCACHE_GHA_ENABLED=true \
             -e RUSTC_WRAPPER=sccache \
-            -e ACTIONS_CACHE_URL \
-            -e ACTIONS_RUNTIME_TOKEN \
             rust:alpine \
             sh -c '
               apk add --no-cache build-base alsa-lib-dev freetype-dev fontconfig-dev perl make python3 clang-dev openssl-dev ninja curl git gn linux-headers sccache && \
