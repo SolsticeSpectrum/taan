@@ -99,12 +99,12 @@ jobs:
           ARG TARGETPLATFORM
           FROM --platform=$BUILDPLATFORM tonistiigi/xx:latest AS xx
           
-          # Use Debian-based Rust image for the builder (glibc) to avoid bindgen issues
+          # Use Debian Rust image (glibc) to avoid bindgen issues
           FROM --platform=$BUILDPLATFORM rust:slim-bookworm AS builder
           ARG TARGETPLATFORM
           COPY --from=xx / /
           
-          # Install build tools for Debian
+          # Build tools for Debian
           RUN apt-get update && apt-get install -y \
               build-essential \
               pkg-config \
@@ -117,13 +117,13 @@ jobs:
               ninja-build \
               && rm -rf /var/lib/apt/lists/*
           
-          # Install gn manually since Debian doesn't have it in repos
+          # Debian doesn't have gn in repos
           RUN curl -L https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-amd64/+/latest -o /tmp/gn.zip && \
               unzip /tmp/gn.zip -d /usr/local/bin && \
               chmod +x /usr/local/bin/gn && \
               rm /tmp/gn.zip
           
-          # Install musl cross-compilation toolchain and target libraries
+          # musl cross-compilation toolchain
           RUN xx-apt-get install -y \
               gcc \
               g++ \
@@ -142,7 +142,7 @@ jobs:
           # Copy everything for the build
           COPY . .
           
-          # Build with cache mounts and extract binary from cache
+          # Build with cache mounts
           RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-${TARGETPLATFORM} \
               --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git-${TARGETPLATFORM} \
               --mount=type=cache,target=/workspace/target,id=cargo-target-${TARGETPLATFORM} \
@@ -163,7 +163,7 @@ jobs:
           platforms: linux/amd64
           outputs: type=local,dest=./dist-x86_64
           cache-from: type=gha,scope=musl-x86_64
-          cache-to: type=gha,mode=max,scope=musl-x86_64
+          cache-to: type=gha,mode=min,scope=musl-x86_64
 
       - name: Build ARM64 musl
         uses: docker/build-push-action@v6
@@ -173,7 +173,7 @@ jobs:
           platforms: linux/arm64
           outputs: type=local,dest=./dist-arm64
           cache-from: type=gha,scope=musl-arm64
-          cache-to: type=gha,mode=max,scope=musl-arm64
+          cache-to: type=gha,mode=min,scope=musl-arm64
 
       - name: Upload x86_64 artifact
         uses: actions/upload-artifact@v4
