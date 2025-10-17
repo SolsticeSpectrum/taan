@@ -102,6 +102,7 @@ jobs:
           # Build tools for Debian
           FROM --platform=$BUILDPLATFORM rust:slim-bookworm AS builder
           ARG TARGETPLATFORM
+          ARG TARGETARCH
           COPY --from=xx / /
           
           # Build tools for Debian
@@ -139,12 +140,13 @@ jobs:
           ENV SKIA_NINJA_COMMAND=/usr/bin/ninja
           ENV SKIA_GN_COMMAND=/usr/local/bin/gn
           
+          # Copy everything for the build
           COPY . .
           
           # Build with cache mounts
-          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-$TARGETPLATFORM \
-              --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git-$TARGETPLATFORM \
-              --mount=type=cache,target=/workspace/target,id=cargo-target-$TARGETPLATFORM \
+          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-$TARGETARCH \
+              --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git-$TARGETARCH \
+              --mount=type=cache,target=/workspace/target,id=cargo-target-$TARGETARCH \
               xx-cargo build --release && \
               xx-verify target/$(xx-cargo --print-target-triple)/release/taan && \
               cp target/$(xx-cargo --print-target-triple)/release/taan /taan && \
