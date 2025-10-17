@@ -132,7 +132,8 @@ jobs:
               libasound2-dev \
               libfreetype-dev \
               libfontconfig1-dev \
-              libssl-dev
+              libssl-dev \
+              pkg-config
           
           WORKDIR /workspace
           
@@ -140,7 +141,6 @@ jobs:
           ENV SKIA_NINJA_COMMAND=/usr/bin/ninja
           ENV SKIA_GN_COMMAND=/usr/local/bin/gn
           
-          # Copy everything for the build
           COPY . .
           
           # Build with cache mounts
