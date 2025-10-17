@@ -131,20 +131,11 @@ jobs:
           
           WORKDIR /workspace
           
-          # Copy manifests first to leverage caching
-          COPY Cargo.toml Cargo.lock ./
-          RUN mkdir -p .cargo && test -f .cargo/config.toml && cp .cargo/config.toml .cargo/config.toml || true
-          
           ENV RUSTFLAGS="-C target-feature=-crt-static"
           ENV SKIA_NINJA_COMMAND=/usr/bin/ninja
           ENV SKIA_GN_COMMAND=/usr/bin/gn
           
-          # Fetch dependencies (cached separately from build)
-          RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-${TARGETPLATFORM} \
-              --mount=type=cache,target=/usr/local/cargo/git,id=cargo-git-${TARGETPLATFORM} \
-              cargo fetch --locked
-          
-          # Copy source code
+          # Copy everything for the build
           COPY . .
           
           # Build with cache mounts and extract binary from cache
