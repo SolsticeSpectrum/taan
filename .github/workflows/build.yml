@@ -99,41 +99,44 @@ jobs:
           ARG TARGETPLATFORM
           FROM --platform=$BUILDPLATFORM tonistiigi/xx:latest AS xx
           
-          FROM --platform=$BUILDPLATFORM rust:alpine AS builder
+          # Use Debian-based Rust image for the builder (glibc) to avoid bindgen issues
+          FROM --platform=$BUILDPLATFORM rust:slim-bookworm AS builder
           ARG TARGETPLATFORM
           COPY --from=xx / /
           
-          RUN apk add --no-cache \
-              build-base \
-              alsa-lib-dev \
-              freetype-dev \
-              fontconfig-dev \
-              perl \
-              make \
-              python3 \
+          # Install build tools for Debian
+          RUN apt-get update && apt-get install -y \
+              build-essential \
+              pkg-config \
               clang \
-              clang-dev \
-              openssl-dev \
-              ninja \
-              curl \
+              lld \
               git \
-              gn \
-              linux-headers \
-              lld
+              curl \
+              python3 \
+              ninja-build \
+              && rm -rf /var/lib/apt/lists/*
           
-          RUN xx-apk add --no-cache \
-              musl-dev \
+          # Install gn manually since Debian doesn't have it in repos
+          RUN curl -L https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-amd64/+/latest -o /tmp/gn.zip && \
+              unzip /tmp/gn.zip -d /usr/local/bin && \
+              chmod +x /usr/local/bin/gn && \
+              rm /tmp/gn.zip
+          
+          # Install musl cross-compilation toolchain and target libraries
+          RUN xx-apt-get install -y \
               gcc \
-              alsa-lib-dev \
-              freetype-dev \
-              fontconfig-dev \
-              openssl-dev
+              g++ \
+              libc6-dev \
+              libasound2-dev \
+              libfreetype-dev \
+              libfontconfig1-dev \
+              libssl-dev
           
           WORKDIR /workspace
           
           ENV RUSTFLAGS="-C target-feature=-crt-static"
           ENV SKIA_NINJA_COMMAND=/usr/bin/ninja
-          ENV SKIA_GN_COMMAND=/usr/bin/gn
+          ENV SKIA_GN_COMMAND=/usr/local/bin/gn
           
           # Copy everything for the build
           COPY . .
